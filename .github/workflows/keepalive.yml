@@ -1,0 +1,33 @@
+name: Keepalive
+
+# §2: a Supabase free-tier project pauses after 7 days without API activity.
+# This touches a trivial endpoint every 3 days, comfortably inside that window.
+# It is a workaround, not a guarantee — see docs/RUNBOOK.md.
+
+on:
+  schedule:
+    - cron: '17 4 */3 * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    name: Touch the database
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call fn_ping
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ]; then
+            echo "SUPABASE_URL is not set; add it under repository secrets." >&2
+            exit 1
+          fi
+          status=$(curl -s -o /tmp/ping.out -w '%{http_code}' \
+            -X POST "$SUPABASE_URL/rest/v1/rpc/fn_ping" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "authorization: Bearer $SUPABASE_ANON_KEY" \
+            -H 'content-type: application/json' \
+            -d '{}')
+          echo "HTTP $status: $(cat /tmp/ping.out)"
+          test "$status" = "200"

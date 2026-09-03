@@ -1,0 +1,41 @@
+name: Backup
+
+# §2: the free plan has no managed backups. This dumps the database weekly and
+# keeps the artifact for 90 days. Worst case is therefore 7 days of data loss —
+# stated plainly in docs/RUNBOOK.md, along with the restore procedure.
+
+on:
+  schedule:
+    - cron: '0 2 * * 0'
+  workflow_dispatch:
+
+jobs:
+  dump:
+    name: pg_dump
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with: { version: latest }
+
+      - name: Dump roles, schema and data
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "SUPABASE_DB_URL is not set; add the pooler connection string as a secret." >&2
+            exit 1
+          fi
+          mkdir -p backup
+          stamp=$(date -u +%Y-%m-%dT%H-%M-%SZ)
+          supabase db dump --db-url "$SUPABASE_DB_URL" --role-only  -f "backup/roles-$stamp.sql"
+          supabase db dump --db-url "$SUPABASE_DB_URL"              -f "backup/schema-$stamp.sql"
+          supabase db dump --db-url "$SUPABASE_DB_URL" --data-only  -f "backup/data-$stamp.sql"
+          gzip backup/*.sql
+          ls -la backup
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: khata-backup-${{ github.run_id }}
+          path: backup/
+          retention-days: 90

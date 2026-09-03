@@ -1,0 +1,129 @@
+{
+  "app": {
+    "name": "Khata",
+    "today": "Today",
+    "month": "Month",
+    "search": "Search",
+    "settings": "Settings",
+    "save": "Save",
+    "cancel": "Cancel",
+    "done": "Done",
+    "back": "Back",
+    "loading": "Loading",
+    "locked": "App lock is on"
+  },
+  "auth": {
+    "title": "Sign in",
+    "phoneLabel": "Phone number",
+    "phonePlaceholder": "+91 99999 00001",
+    "emailLabel": "Email",
+    "sendCode": "Send code",
+    "codeLabel": "6-digit code",
+    "verify": "Verify",
+    "useEmail": "Use email instead",
+    "usePhone": "Use phone instead",
+    "codeSent": "Code sent. In local development the code is 123456.",
+    "signOut": "Sign out"
+  },
+  "onboarding": {
+    "step": "Step {current} of {total}",
+    "nameTitle": "What is your business called?",
+    "namePlaceholder": "Sharma Print Lab",
+    "currencyTitle": "Currency and format",
+    "balanceTitle": "Cash in hand right now",
+    "balanceHint": "You can change this later.",
+    "next": "Next",
+    "finish": "Start recording"
+  },
+  "composer": {
+    "amount": "Amount",
+    "expense": "Expense",
+    "income": "Income",
+    "notePlaceholder": "What was it for?",
+    "partyPlaceholder": "Customer or supplier",
+    "category": "Category",
+    "account": "Account",
+    "attach": "Add bill photo",
+    "attached": "Photo attached",
+    "save": "Save",
+    "saved": "Saved",
+    "duplicateTitle": "Looks like a duplicate",
+    "duplicateBody": "You saved the same amount in this category a moment ago.",
+    "duplicateConfirm": "Save anyway",
+    "amountRequired": "Enter an amount",
+    "quickChips": "Quick add",
+    "edit": "Edit"
+  },
+  "today": {
+    "spentToday": "Spent today",
+    "receivedToday": "Received today",
+    "recent": "Recent entries",
+    "empty": "No entries yet today. Type an amount above and save.",
+    "pendingSync": "{count, plural, =1 {1 entry waiting to sync} other {# entries waiting to sync}}",
+    "undo": "Undo",
+    "deleted": "Entry deleted"
+  },
+  "monthView": {
+    "income": "Income",
+    "expense": "Expense",
+    "net": "Net",
+    "byCategory": "Where the money went",
+    "empty": "Nothing recorded this month yet.",
+    "previous": "Previous month",
+    "next": "Next month",
+    "entries": "{count, plural, =1 {1 entry} other {# entries}}",
+    "insightHigher": "{category} is {percent}% higher than last month.",
+    "insightLower": "{category} is {percent}% lower than last month.",
+    "dismiss": "Dismiss"
+  },
+  "search": {
+    "placeholder": "Search notes, parties or amounts",
+    "empty": "No matches.",
+    "prompt": "Type to search your entries."
+  },
+  "party": {
+    "total": "Total with {name}",
+    "empty": "No entries with this party yet."
+  },
+  "settings": {
+    "business": "Business",
+    "appLock": "App lock",
+    "appLockHint": "Ask for a 4-digit PIN when the app has been in the background for 5 minutes.",
+    "setPin": "Set PIN",
+    "changePin": "Change PIN",
+    "removePin": "Turn off",
+    "whatsapp": "WhatsApp",
+    "whatsappHint": "Send the code below from the phone you want to link.",
+    "generateCode": "Get a linking code",
+    "codeExpires": "Expires in 10 minutes",
+    "linkedNumbers": "Linked numbers",
+    "unlink": "Unlink",
+    "export": "Export CSV",
+    "exportHint": "Every entry in the range, ready for Excel or Google Sheets.",
+    "from": "From",
+    "to": "To",
+    "download": "Download",
+    "members": "Members",
+    "devices": "This device",
+    "signOutDevice": "Sign out this device",
+    "reauth": "Confirm it is you",
+    "reauthHint": "Enter the code we sent to continue.",
+    "ownerOnly": "Only the owner can do this.",
+    "categories": "Categories",
+    "accounts": "Accounts",
+    "addCategory": "Add category",
+    "addAccount": "Add account",
+    "archive": "Archive",
+    "rename": "Rename",
+    "namePlaceholder": "Name"
+  },
+  "lock": {
+    "title": "Enter your PIN",
+    "wrong": "That PIN is not right.",
+    "unlock": "Unlock"
+  },
+  "errors": {
+    "generic": "Something went wrong. Try again.",
+    "offline": "You are offline. This entry will sync when you reconnect."
+  }
+}

@@ -1,0 +1,92 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * §6.1: one sans-serif, three type sizes, colour used only for meaning.
+ * The palette is defined once and re-pointed for dark; nothing else changes.
+ */
+:root {
+  --bg: 40 20% 98%;
+  --surface: 0 0% 100%;
+  --border: 40 8% 88%;
+  --fg: 30 10% 12%;
+  --muted: 30 7% 38%;
+  --accent: 158 68% 26%;
+  --accent-fg: 0 0% 100%;
+  --expense: 4 76% 40%;
+  --income: 158 68% 26%;
+
+  --font-inter: 'Inter', 'Inter var';
+}
+
+.dark {
+  --bg: 30 8% 8%;
+  --surface: 30 8% 12%;
+  --border: 30 6% 22%;
+  --fg: 40 18% 96%;
+  --muted: 36 10% 68%;
+  --accent: 158 52% 46%;
+  --accent-fg: 30 12% 8%;
+  --expense: 4 78% 62%;
+  --income: 158 52% 52%;
+}
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-bg text-fg antialiased;
+    font-family:
+      var(--font-inter), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  /* §6.1: amounts are the content — always tabular so columns line up. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum';
+  }
+
+  input,
+  textarea,
+  select {
+    @apply bg-transparent outline-none;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-accent ring-offset-2 ring-offset-bg;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-card border border-border bg-surface;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-chip border border-border bg-surface px-3 py-1.5 text-label
+           transition-transform duration-feedback active:scale-[0.96];
+  }
+
+  .chip-selected {
+    @apply border-transparent bg-accent text-accent-fg;
+  }
+
+  .skeleton {
+    @apply animate-pulse rounded-md bg-border/60;
+  }
+}
+
+/* §6.2: all motion respects the system setting. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

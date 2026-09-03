@@ -1,0 +1,22 @@
+{
+  "name": "Khata — daily cash ledger",
+  "short_name": "Khata",
+  "description": "Record an expense in three taps. Add entries from WhatsApp.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fbfaf7",
+  "theme_color": "#1d7a56",
+  "categories": ["finance", "business", "productivity"],
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Add expense", "short_name": "Expense", "url": "/e/new?type=expense", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Add income", "short_name": "Income", "url": "/e/new?type=income", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "This month", "short_name": "Month", "url": "/month", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

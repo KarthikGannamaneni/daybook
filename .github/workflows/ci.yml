@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  MOCK_WHATSAPP: '1'
+
+jobs:
+  static:
+    name: Lint, types, unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9.12.3 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # The parser is mirrored into supabase/functions; drift means the app and
+      # the webhook could disagree about what "450 tea shop" means.
+      - name: Parser mirror is in sync
+        run: pnpm check:parser-sync
+
+      - run: pnpm -r typecheck
+      - run: pnpm --filter @khata/web lint
+      - name: Unit tests (parser, money, prediction, CSV, utils)
+        run: pnpm -r test
+      - name: Parser coverage thresholds
+        run: pnpm --filter @khata/parser test:coverage
+
+  database:
+    name: Database policies (pgTAP)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with: { version: latest }
+      - name: Start the local stack
+        run: supabase start
+      - name: Run pgTAP
+        run: supabase test db
+      - name: Stop
+        if: always()
+        run: supabase stop --no-backup
+
+  functions:
+    name: Edge functions (Deno)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with: { deno-version: v2.x }
+      - name: Deno tests
+        working-directory: supabase/functions
+        run: deno test -A
+      - name: Type-check the functions
+        working-directory: supabase/functions
+        run: deno check whatsapp-webhook/index.ts whatsapp-send/index.ts
+
+  e2e:
+    name: End to end + bundle budget
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9.12.3 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @khata/web exec playwright install --with-deps chromium
+
+      - name: Build (demo mode)
+        run: pnpm --filter @khata/web build:demo
+        env:
+          NEXT_PUBLIC_DEMO_MODE: '1'
+
+      # §10.6: the home screen must stay under 180 KB of gzipped JS.
+      - name: Bundle budget
+        run: pnpm check:bundle
+
+      - name: Playwright (Pixel 7 + desktop)
+        run: pnpm --filter @khata/web test:e2e
+        env:
+          NEXT_PUBLIC_DEMO_MODE: '1'
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: |
+            apps/web/playwright-report
+            apps/web/test-results
+          retention-days: 14

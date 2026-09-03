@@ -1,0 +1,11 @@
+{
+  "imports": {
+    "@khata/parser": "./_shared/parser/index.ts",
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@2.45.4"
+  },
+  "tasks": {
+    "test": "deno test -A"
+  },
+  "fmt": { "singleQuote": true, "lineWidth": 100 },
+  "compilerOptions": { "strict": true, "lib": ["deno.window", "ES2022"] }
+}

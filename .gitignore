@@ -1,0 +1,28 @@
+node_modules/
+.next/
+out/
+dist/
+coverage/
+.turbo/
+*.tsbuildinfo
+
+# env
+.env
+.env.local
+.env*.local
+!.env.example
+
+# supabase
+supabase/.branches/
+supabase/.temp/
+supabase/.env
+
+# test artifacts
+playwright-report/
+test-results/
+blob-report/
+apps/web/public/sw.js
+apps/web/public/workbox-*.js
+apps/web/public/swe-worker-*.js
+
+.DS_Store

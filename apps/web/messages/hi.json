@@ -1,0 +1,21 @@
+{
+  "app": {
+    "name": "खाता",
+    "today": "आज",
+    "month": "महीना",
+    "search": "खोजें",
+    "settings": "सेटिंग्स",
+    "save": "सेव करें",
+    "cancel": "रद्द करें"
+  },
+  "composer": {
+    "amount": "रकम",
+    "expense": "खर्च",
+    "income": "आमदनी",
+    "save": "सेव करें"
+  },
+  "today": {
+    "spentToday": "आज का खर्च",
+    "recent": "हाल की एंट्री"
+  }
+}
