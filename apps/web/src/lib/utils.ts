@@ -44,6 +44,46 @@ export function formatMonthLabel(monthIso: string, locale: string): string {
   );
 }
 
+/** Wall-clock parts of an instant in a given IANA timezone. */
+function zonedParts(at: Date, timezone: string): Record<string, number> {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    hour12: false,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).formatToParts(at);
+  const out: Record<string, number> = {};
+  for (const p of parts) if (p.type !== 'literal') out[p.type] = Number(p.value);
+  out.hour = (out.hour ?? 0) % 24; // some ICU builds render midnight as 24.
+  return out;
+}
+
+/**
+ * The instant at which a calendar day begins in a given timezone.
+ *
+ * Totals are bucketed by the business's local day (see v_daily_totals), so any
+ * query that drills into a bucket has to use the same boundary. Filtering by
+ * UTC midnight instead silently drops entries near the edges — in IST that is
+ * everything between 18:30 and midnight.
+ */
+export function zonedDayStart(dayIso: string, timezone: string): string {
+  const [year, month, day] = dayIso.split('-').map(Number);
+  const guess = Date.UTC(year!, (month ?? 1) - 1, day ?? 1, 0, 0, 0);
+  const p = zonedParts(new Date(guess), timezone);
+  const asIfUtc = Date.UTC(p.year!, (p.month ?? 1) - 1, p.day ?? 1, p.hour ?? 0, p.minute ?? 0, p.second ?? 0);
+  return new Date(guess - (asIfUtc - guess)).toISOString();
+}
+
+/** The last instant of a calendar day in a given timezone. */
+export function zonedDayEnd(dayIso: string, timezone: string): string {
+  const nextDay = new Date(zonedDayStart(dayIso, timezone));
+  return new Date(nextDay.getTime() + 86400000 - 1).toISOString();
+}
+
 export function formatTime(iso: string, locale: string, timezone: string): string {
   return new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit', timeZone: timezone }).format(
     new Date(iso),

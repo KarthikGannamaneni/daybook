@@ -13,7 +13,7 @@ import { Label, TextField } from '@/components/ui/field';
 import { Sheet } from '@/components/ui/sheet';
 import { isDemoMode } from '@/lib/data';
 import { hashPin } from '@/lib/security/pin';
-import { dayKey } from '@/lib/utils';
+import { dayKey, zonedDayEnd, zonedDayStart } from '@/lib/utils';
 import { ReauthSheet } from './reauth-sheet';
 import { TaxonomySettings } from './taxonomy-settings';
 
@@ -242,9 +242,10 @@ function ExportSection() {
     setBusy(true);
     setError(null);
     try {
+      // The range the user picked is calendar days in their own timezone.
       const entries = await repo.listEntries(businessId, {
-        from: new Date(`${from}T00:00:00.000Z`).toISOString(),
-        to: new Date(`${to}T23:59:59.999Z`).toISOString(),
+        from: zonedDayStart(from, timezone),
+        to: zonedDayEnd(to, timezone),
       });
       const csv = entriesToCsv(entries, { currency, locale, timezone });
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addMonths, dayKey, formatDayLabel, formatMonthLabel, monthKey } from '../utils';
+import { addMonths, dayKey, formatDayLabel, formatMonthLabel, monthKey, zonedDayEnd, zonedDayStart } from '../utils';
 import { maskPhone } from '../data/phone';
 import { buildInsight } from '@/components/app/month-screen';
 import type { CategoryTotal } from '@khata/shared';
@@ -73,5 +73,29 @@ describe('buildInsight', () => {
   it('reports a drop', () => {
     const insight = buildInsight([total('Rent', '100000')], [total('Rent', '200000')]);
     expect(insight?.direction).toBe('down');
+  });
+});
+
+describe('zoned day boundaries', () => {
+  it('starts an IST day at 18:30 UTC the day before', () => {
+    // Regression: filtering a month by UTC midnight dropped every IST evening
+    // entry, so a category total disagreed with the entries behind it.
+    expect(zonedDayStart('2026-09-01', 'Asia/Kolkata')).toBe('2026-08-31T18:30:00.000Z');
+    expect(zonedDayEnd('2026-09-01', 'Asia/Kolkata')).toBe('2026-09-01T18:29:59.999Z');
+  });
+
+  it('is the identity for UTC', () => {
+    expect(zonedDayStart('2026-09-01', 'UTC')).toBe('2026-09-01T00:00:00.000Z');
+  });
+
+  it('handles a timezone behind UTC', () => {
+    expect(zonedDayStart('2026-09-01', 'America/New_York')).toBe('2026-09-01T04:00:00.000Z');
+  });
+
+  it('round-trips with dayKey', () => {
+    for (const tz of ['Asia/Kolkata', 'UTC', 'America/New_York', 'Pacific/Auckland']) {
+      expect(dayKey(zonedDayStart('2026-09-01', tz), tz)).toBe('2026-09-01');
+      expect(dayKey(zonedDayEnd('2026-09-01', tz), tz)).toBe('2026-09-01');
+    }
   });
 });

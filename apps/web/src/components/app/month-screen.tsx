@@ -9,7 +9,7 @@ import { Money, type CategoryTotal } from '@khata/shared';
 import { useBusiness } from '@/components/providers';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/field';
-import { addMonths, formatMonthLabel, monthKey } from '@/lib/utils';
+import { addMonths, formatMonthLabel, monthKey, zonedDayStart } from '@/lib/utils';
 import { EntryList } from './entry-list';
 
 /**
@@ -182,16 +182,19 @@ function Total({
 }
 
 function CategoryEntries({ month, categoryId }: { month: string; categoryId: string }) {
-  const { businessId, repo } = useBusiness();
-  const from = month;
-  const to = addMonths(month, 1);
+  const { businessId, repo, bootstrap } = useBusiness();
+  const { timezone } = bootstrap.business;
+  // Same month boundary the totals above use, or the drill-down disagrees with
+  // the number it was opened from.
+  const from = zonedDayStart(month, timezone);
+  const to = zonedDayStart(addMonths(month, 1), timezone);
   const { data, isLoading } = useQuery({
     queryKey: ['entries', businessId, 'category', month, categoryId],
     queryFn: () =>
       repo.listEntries(businessId, {
         categoryId,
-        from: new Date(from).toISOString(),
-        to: new Date(to).toISOString(),
+        from,
+        to: new Date(new Date(to).getTime() - 1).toISOString(),
       }),
   });
 

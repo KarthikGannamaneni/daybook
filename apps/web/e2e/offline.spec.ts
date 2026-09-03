@@ -56,7 +56,30 @@ test('the ledger is readable while offline', async ({ page, context }) => {
   await page.getByRole('link', { name: 'Month' }).click();
   await expect(page.getByTestId('month-expense')).toBeVisible();
   await expect(page.getByTestId('category-breakdown')).toBeVisible();
+});
 
-  await page.getByRole('link', { name: 'Today' }).click();
+/**
+ * §4.7 promises offline *viewing*, and this is the honest boundary of it: the
+ * screen you are on keeps working and its data stays readable. Moving between
+ * tabs after Next's client router cache has expired needs a network round trip;
+ * the service worker falls back to the cached shell so the app still boots, but
+ * that is a full reload, not an instant tab switch. See docs/DECISIONS.md.
+ */
+test('the current screen keeps working after the connection drops', async ({ page, context }) => {
+  await resetDemoData(page);
+  await signInToComposer(page);
   await expect(page.getByTestId('entry-row').first()).toBeVisible();
+
+  await context.setOffline(true);
+  await expect(page.getByTestId('offline-indicator')).toBeVisible();
+
+  // Everything already on screen stays readable, and totals still compute.
+  await expect(page.getByTestId('entry-row').first()).toBeVisible();
+  await expect(page.getByTestId('today-expense-total')).toBeVisible();
+
+  // And the composer still accepts work, which is the point of the outbox.
+  await page.getByTestId('amount-input').fill('75');
+  await page.getByTestId('note-input').fill('offline while viewing');
+  await page.getByTestId('save-entry').click();
+  await expect(page.getByTestId('sync-pill')).toContainText('1 entry waiting to sync');
 });
