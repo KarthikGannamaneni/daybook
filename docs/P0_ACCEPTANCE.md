@@ -28,9 +28,8 @@ Seeding data from supabase/seed.sql...
 
 ### ☑ All tests in §10.1–10.4 pass
 
-**Pass locally. Not yet observed in CI** — the repository has no remote, so
-`.github/workflows/ci.yml` has never executed. Every job it defines was run by
-hand with the same commands.
+**Pass**, in CI on a clean GitHub runner as well as locally.
+Run: <https://github.com/KarthikGannamaneni/daybook/actions>
 
 | Suite | Command | Result |
 |---|---|---|
@@ -129,8 +128,9 @@ Lighthouse 12 removed the PWA category, so this is asserted rather than scored.
 ### ☒ Keepalive and backup workflows exist and have run at least once successfully
 
 **Fail.** Both workflows exist and are complete
-(`.github/workflows/keepalive.yml`, `backup.yml`), but the repository has no
-GitHub remote, so **neither has ever run**. They also need three secrets
+(`.github/workflows/keepalive.yml`, `backup.yml`), and the repository now has a
+remote, but **neither has ever run**: they are scheduled/manual and both need
+secrets that do not exist until a cloud Supabase project does. They need three secrets
 (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_DB_URL`) that only exist once a
 cloud project is created. The endpoint the keepalive calls (`fn_ping`) is
 implemented and tested by pgTAP.
@@ -178,7 +178,8 @@ not credentials.
 ## What I would not ship without
 
 1. The keepalive and backup workflows actually running green once against a real
-   project. Until then the backup story is theory.
+   project. Until then the backup story is theory. (The other three CI jobs —
+   unit, pgTAP, edge functions — and the e2e job are green on GitHub.)
 2. Opening the CSV in Excel and Google Sheets by hand.
 3. One real WhatsApp round trip through Meta's servers rather than a signed local
    payload. Everything the code controls is verified; the Meta hop is not.

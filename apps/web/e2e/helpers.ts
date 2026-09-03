@@ -50,3 +50,4 @@ export async function waitForMonthTotals(
     parseMinorFromCurrency((await page.getByTestId(testId).textContent()) ?? '0');
   return { income: await read('month-income'), expense: await read('month-expense'), net: await read('month-net') };
 }
+

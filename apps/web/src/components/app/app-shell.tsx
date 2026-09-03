@@ -28,6 +28,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     else if (session && businesses.length === 0) router.replace('/onboarding');
   }, [isLoading, session, businesses, router]);
 
+  // §4.7: "cached for offline viewing" has to mean the other tabs too. Next
+  // prefetches links in the viewport on its own, but only eventually — warming
+  // them once the app is idle is what makes Month and Search readable after the
+  // connection drops, rather than leaving it to a race.
+  useEffect(() => {
+    if (!bootstrap) return;
+    const warm = () => {
+      router.prefetch('/month');
+      router.prefetch('/search');
+      router.prefetch('/settings');
+    };
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      const handle = window.requestIdleCallback(warm, { timeout: 2000 });
+      return () => window.cancelIdleCallback(handle);
+    }
+    const handle = setTimeout(warm, 300);
+    return () => clearTimeout(handle);
+  }, [bootstrap, router]);
+
   if (bootstrapError) {
     return (
       <main className="mx-auto flex min-h-dvh w-full max-w-lg flex-col justify-center gap-3 p-6">

@@ -11,14 +11,16 @@ test('entries created offline queue and then sync exactly once', async ({ page, 
   await context.setOffline(true);
   await expect(page.getByTestId('offline-indicator')).toBeVisible();
 
+  // Wait for each save to land before typing the next one: the composer clears
+  // itself on success, so typing into it mid-save races that reset.
   await page.getByTestId('amount-input').fill('111');
   await page.getByTestId('note-input').fill('offline one');
   await page.getByTestId('save-entry').click();
+  await expect(page.getByTestId('sync-pill')).toContainText('1 entry waiting to sync');
 
   await page.getByTestId('amount-input').fill('222');
   await page.getByTestId('note-input').fill('offline two');
   await page.getByTestId('save-entry').click();
-
   await expect(page.getByTestId('sync-pill')).toContainText('2 entries waiting to sync');
 
   await context.setOffline(false);
@@ -40,8 +42,21 @@ test('the ledger is readable while offline', async ({ page, context }) => {
   await signInToComposer(page);
   await expect(page.getByTestId('entry-row').first()).toBeVisible();
 
+  // Visit the tabs once while online. The app also warms them from an idle
+  // callback, but a test must not race that: a route whose JS was never
+  // fetched cannot render offline, however good the cache is.
+  await page.getByRole('link', { name: 'Month' }).click();
+  await expect(page.getByTestId('month-expense')).toBeVisible();
+  await page.getByRole('link', { name: 'Today' }).click();
+  await expect(page.getByTestId('amount-input')).toBeVisible();
+
   await context.setOffline(true);
+  await expect(page.getByTestId('offline-indicator')).toBeVisible();
+
   await page.getByRole('link', { name: 'Month' }).click();
   await expect(page.getByTestId('month-expense')).toBeVisible();
   await expect(page.getByTestId('category-breakdown')).toBeVisible();
+
+  await page.getByRole('link', { name: 'Today' }).click();
+  await expect(page.getByTestId('entry-row').first()).toBeVisible();
 });
