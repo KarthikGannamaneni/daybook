@@ -28,8 +28,13 @@ Seeding data from supabase/seed.sql...
 
 ### ☑ All tests in §10.1–10.4 pass
 
-**Pass**, in CI on a clean GitHub runner as well as locally.
-Run: <https://github.com/KarthikGannamaneni/daybook/actions>
+**Pass**, green in CI on a clean GitHub runner as well as locally — all four
+jobs: unit, pgTAP, edge functions, and e2e + bundle budget.
+Runs: <https://github.com/KarthikGannamaneni/daybook/actions>
+
+CI earned its keep immediately: it caught an offline test that passed locally
+only because link prefetch had won a race, and a queue test that typed into the
+composer while it was still clearing. Both are fixed rather than retried.
 
 | Suite | Command | Result |
 |---|---|---|
@@ -86,8 +91,14 @@ entry to another user. The e2e suite shows the same refusal surfacing in the UI.
 
 **Pass.** `e2e/offline.spec.ts` goes offline, saves two entries, asserts the
 "2 entries waiting to sync" pill, comes back online, and asserts both synced
-**once each** and the pill cleared. A reload does not replay the queue. A second
-test reads the month view with the network off.
+**once each** and the pill cleared. A reload does not replay the queue. Two more
+tests read a previously-visited month view with the network off, and confirm the
+current screen keeps working and accepting entries after the connection drops.
+
+**Bounded, and the bound is documented:** switching tabs offline works for
+routes already loaded, but Next's client router cache expires after ~30 seconds
+and an expired route needs the network. The service worker falls back to the
+cached shell so a reload still boots the app. See DECISIONS §18.
 
 ### ◐ CSV export opens correctly in Excel and Google Sheets
 
@@ -161,6 +172,7 @@ not credentials.
 
 **Known gaps inside P0:**
 
+- Full offline *navigation* between tabs is bounded, as above (DECISIONS §18).
 - §6.5 "long-press on a chip opens its edit menu without navigating" is **not
   implemented**. Chips are tap-to-fill only; category and account editing lives
   in Settings.

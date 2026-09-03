@@ -155,7 +155,32 @@ entry I just added appears at the top" intermittently false.
 `number` appears, at the last step before pixels, and the count-up animation
 runs on a copy while the value at rest always re-renders from the bigint.
 
-## 18. Parser branch coverage
+## 18. Offline is viewing, plus a write queue — not full offline navigation
+
+§4.7 asks for the shell and recent entries to be readable offline, and for
+creates to queue. Both hold. What does **not** hold is switching tabs
+indefinitely after the connection drops: Next's client router cache for dynamic
+routes expires after about 30 seconds, and an expired route needs an RSC fetch.
+
+Two things narrow the gap. The app warms `/month`, `/search` and `/settings`
+from an idle callback, so the tabs are loaded before anyone needs them. And the
+service worker answers a failed *navigation* with the cached shell, so a full
+reload offline still boots the app — which then reads its data locally — rather
+than showing the browser's offline error page.
+
+Closing it completely means a build-integrated service worker that precaches
+route chunks and RSC payloads. That is a real project, and it is P1.
+
+## 19. Day boundaries belong to the business, not to UTC
+
+Totals bucket by the business's local day (`v_daily_totals` groups on
+`occurred_at at time zone b.timezone`). Anything that drills into a bucket has
+to use the same boundary, or it disagrees with the number it was opened from —
+in IST, filtering from UTC midnight drops every entry between 18:30 and
+midnight. `zonedDayStart` / `zonedDayEnd` exist so the month drill-down and the
+CSV date pickers use the same edges the totals do.
+
+## 20. Parser branch coverage
 
 The prompt targets 100% branch coverage on the parser. Measured: **100%
 statements, ~93% branches**, with the shortfall entirely in defensive `?? ''`
