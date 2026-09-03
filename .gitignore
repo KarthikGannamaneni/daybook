@@ -26,3 +26,4 @@ apps/web/public/workbox-*.js
 apps/web/public/swe-worker-*.js
 
 .DS_Store
+.vercel
