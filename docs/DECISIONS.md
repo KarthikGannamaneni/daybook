@@ -180,7 +180,66 @@ in IST, filtering from UTC midnight drops every entry between 18:30 and
 midnight. `zonedDayStart` / `zonedDayEnd` exist so the month drill-down and the
 CSV date pickers use the same edges the totals do.
 
-## 20. Parser branch coverage
+## 20. P1: recurring entries propose, they never post
+
+A schedule produces a card, not a row. Auto-posting would make the ledger a
+forecast of what should have happened rather than a record of what did, and the
+first time rent went out on a different day the numbers would be quietly wrong.
+Confirm writes it; Skip advances the schedule without writing anything.
+
+Monthly schedules clamp: a rent set for the 31st is due on the 30th in April and
+the 28th in February, rather than skipping those months. The arithmetic lives in
+`fn_next_due` in SQL and is mirrored in the demo store, with both exercised by
+tests.
+
+## 21. P1: budgets alert in the app only
+
+§P1 #8 says in-app, and that is right. A bot that messages people about
+overspending is a bot people mute — and then the useful confirmations go silent
+too. The 80% and 100% thresholds show as colour and a line of text on the month
+view.
+
+Budgets are owner-only to set but readable by everyone: staff should know the
+ceiling they are working against without being able to move it.
+
+## 22. P1: invites are a code, not an email
+
+Adding a member issues a six-character, single-use, 24-hour code. An email invite
+flow means a mail provider, deliverability, bounce handling and a support
+burden — for a person the owner is already in a WhatsApp thread with.
+
+Redeeming has to write a membership row for someone who is not yet a member, so
+`fn_accept_invite` is SECURITY DEFINER with its checks written out explicitly.
+A business can never be left with no owner: both the demo repository and the UI
+refuse it.
+
+## 23. P1: passkeys lock the app; they do not sign you in
+
+`registerPasskey`/`verifyPasskey` use the platform authenticator to gate the
+local UI, replacing the PIN. That is honest about what it is: the same class of
+protection as the PIN — a lock on a device already in someone's hand — with the
+authenticator doing the work of checking the person.
+
+It is **not** an authentication factor against the server. That needs the
+assertion verified against the stored public key in an edge function. The public
+key is stored now precisely so that can be added later without asking anyone to
+re-enrol.
+
+## 24. P1: GST tax is inside the amount, never on top
+
+`entries.tax_amount_minor` is the tax portion *included in* `amount_minor`, with
+a database constraint that it cannot exceed it. Turning GST on must not move a
+single total in the ledger, and this is the only shape where that is true. The
+fields appear only for INR/en-IN businesses.
+
+## 25. Read models over entries are invalidated together
+
+Budgets, quick chips, month totals and the GST summary are all read models over
+the same rows. When only some were refreshed after a write, a budget bar sat
+still while money was being spent. `invalidateLedger()` owns the whole list in
+one place, so the next read model cannot be forgotten.
+
+## 26. Parser branch coverage
 
 The prompt targets 100% branch coverage on the parser. Measured: **100%
 statements, ~93% branches**, with the shortfall entirely in defensive `?? ''`

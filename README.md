@@ -6,6 +6,12 @@ sending `450 tea shop` on WhatsApp.
 Single-entry cashbook, mobile-first installable PWA, INR/en-IN by default and
 configurable per business. Not accounting software, deliberately.
 
+**P0:** composer-first home screen, day/month/search/party views, WhatsApp entry,
+CSV export, offline queue, PIN app lock, roles enforced by row-level security.
+**P1:** recurring entries that propose rather than post, per-category budgets,
+a multi-business switcher, accountant role with a monthly PDF statement,
+passkey app-lock, and optional GST fields.
+
 ```bash
 pnpm install
 pnpm dev:demo     # http://localhost:3000 — no Docker, no accounts, seeded data

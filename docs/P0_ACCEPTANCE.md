@@ -180,6 +180,24 @@ not credentials.
   gated on "after the first week"; it simply does not appear until there is a
   previous month to compare against.
 
+## P1 (built after P0 acceptance)
+
+| Item | Status |
+|---|---|
+| #1 Passkeys / biometrics | **Partial.** Passkey registration and unlock replace the PIN app lock. Passkey *sign-in* against the server is not built — see DECISIONS §23. |
+| #2 Recurring entries | Done. Proposes on the due date, one tap to confirm, never auto-posts. |
+| #3 WhatsApp reminders | Not built. |
+| #4 Voice note entry | Not built. |
+| #5 Receipt OCR | Not built. |
+| #6 Accountant role + PDF statement | Done. Members, roles, invite codes, monthly PDF. |
+| #7 Multi-business switcher | Done. |
+| #8 Budgets per category | Done. In-app soft alerts at 80% and 100%. |
+| #9 GST fields | Done. Optional GSTIN on parties, tax split inside the amount, GST summary. |
+| #10 Google Sheets sync | Not built. |
+
+Test coverage moved with it: **57 pgTAP** (from 35) and **126 e2e scenarios**
+(from 90). Home screen is **156 KB gzipped** against the 180 KB budget.
+
 ## §10.5 / §14 deliverables
 
 - `docs/MANUAL_TEST.md` — a 15-minute script for a non-engineer, on a real phone.
