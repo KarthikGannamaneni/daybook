@@ -1,11 +1,16 @@
 import type {
   Account,
   Business,
+  BudgetStatus,
   Category,
   CategoryTotal,
   EntryView,
+  GstSummaryRow,
+  MemberView,
   Party,
+  PasskeyView,
   QuickChip,
+  RecurringEntryView,
   Role,
   UserSettings,
 } from '@khata/shared';
@@ -68,6 +73,8 @@ export interface CreateEntryInput {
   occurredAt: string;
   attachment?: Blob | null;
   source?: 'app' | 'whatsapp';
+  /** P1 #9: tax portion included in amountMinor. */
+  taxAmountMinor?: string;
 }
 
 export interface UpdateEntryInput {
@@ -79,6 +86,7 @@ export interface UpdateEntryInput {
   note?: string | null;
   occurredAt?: string;
   type?: 'expense' | 'income';
+  taxAmountMinor?: string;
 }
 
 export interface LinkCode {
@@ -92,6 +100,26 @@ export interface WhatsappLinkView {
   linkedAt: string;
   /** Masked for display: +91 98xxx xx210 (§6.4). */
   masked: string;
+}
+
+export interface CreateRecurringInput {
+  businessId: string;
+  type: 'expense' | 'income';
+  amountMinor: string;
+  accountId: string;
+  categoryId: string | null;
+  partyName: string | null;
+  note: string | null;
+  cadence: 'weekly' | 'monthly';
+  dayOfMonth: number | null;
+  dayOfWeek: number | null;
+}
+
+export interface SavePasskeyInput {
+  credentialId: string;
+  publicKey: string;
+  deviceLabel: string | null;
+  transports: string[];
 }
 
 export interface LedgerRepo {
@@ -151,6 +179,42 @@ export interface LedgerRepo {
   unlink(id: string): Promise<void>;
   /** Local-only: feeds a message through the real parser, as the webhook would. */
   simulateInbound?(businessId: string, phoneE164: string, body: string): Promise<string | null>;
+
+  // --- recurring entries (P1 #2) -------------------------------------------
+  listRecurring(businessId: string): Promise<RecurringEntryView[]>;
+  /** Only what is due today or overdue — what the home screen proposes. */
+  listDueRecurring(businessId: string): Promise<RecurringEntryView[]>;
+  createRecurring(input: CreateRecurringInput): Promise<void>;
+  setRecurringActive(id: string, active: boolean): Promise<void>;
+  deleteRecurring(id: string): Promise<void>;
+  /** Posts the proposed entry and advances the schedule. Never called automatically. */
+  confirmRecurring(id: string): Promise<EntryView>;
+  /** Advances the schedule without posting anything. */
+  skipRecurring(id: string): Promise<void>;
+
+  // --- budgets (P1 #8) ------------------------------------------------------
+  listBudgets(businessId: string): Promise<BudgetStatus[]>;
+  setBudget(businessId: string, categoryId: string, amountMinor: string): Promise<void>;
+  removeBudget(id: string): Promise<void>;
+
+  // --- members and invites (P1 #6) ------------------------------------------
+  listMembers(businessId: string): Promise<MemberView[]>;
+  setMemberRole(memberId: string, role: Role): Promise<void>;
+  removeMember(memberId: string): Promise<void>;
+  createInvite(businessId: string, role: Role): Promise<LinkCode>;
+  /** Redeems a code and returns the business joined. */
+  acceptInvite(code: string): Promise<string>;
+
+  // --- passkeys (P1 #1) -----------------------------------------------------
+  listPasskeys(): Promise<PasskeyView[]>;
+  savePasskey(input: SavePasskeyInput): Promise<void>;
+  removePasskey(id: string): Promise<void>;
+  touchPasskey(credentialId: string): Promise<void>;
+
+  // --- GST (P1 #9) ----------------------------------------------------------
+  setGstEnabled(businessId: string, enabled: boolean): Promise<void>;
+  setPartyGstin(partyId: string, gstin: string | null): Promise<void>;
+  gstSummary(businessId: string, monthIso: string): Promise<GstSummaryRow[]>;
 
   // --- realtime -----------------------------------------------------------
   subscribeEntries(businessId: string, onChange: () => void): () => void;

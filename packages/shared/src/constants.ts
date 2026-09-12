@@ -44,3 +44,15 @@ export const DUPLICATE_WINDOW_MS = 2 * 60_000;
 
 export const SUPPORTED_LOCALES = ['en', 'hi', 'te'] as const;
 export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
+
+/** P1 #8: in-app soft alerts only, at these two thresholds. */
+export const BUDGET_WARN_PERCENT = 80;
+export const BUDGET_OVER_PERCENT = 100;
+
+/** P1 #6: business invite codes are short-lived and single use. */
+export const INVITE_CODE_TTL_MS = 24 * 60 * 60_000;
+
+/** Locales where GST fields are offered at all (P1 #9). */
+export function supportsGst(locale: string, currency: string): boolean {
+  return currency.toUpperCase() === 'INR' || locale.toLowerCase().endsWith('-in');
+}

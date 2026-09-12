@@ -11,6 +11,7 @@ import { useApp, useBusiness } from '@/components/providers';
 import { useToast } from '@/components/toast';
 import { Button } from '@/components/ui/button';
 import { Sheet } from '@/components/ui/sheet';
+import { invalidateLedger } from '@/lib/ledger-cache';
 import { enqueue } from '@/lib/offline/queue';
 import { cn, haptic, newClientId } from '@/lib/utils';
 
@@ -23,6 +24,7 @@ import { cn, haptic, newClientId } from '@/lib/utils';
  */
 export function Composer({ onSaved }: { onSaved?: (entry: EntryView) => void }) {
   const t = useTranslations('composer');
+  const tGst = useTranslations('gst');
   const { bootstrap, businessId, repo } = useBusiness();
   const { online } = useApp();
   const queryClient = useQueryClient();
@@ -39,6 +41,7 @@ export function Composer({ onSaved }: { onSaved?: (entry: EntryView) => void }) 
   const [accountId, setAccountId] = useState(bootstrap.defaultAccountId);
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [attachment, setAttachment] = useState<Blob | null>(null);
+  const [taxText, setTaxText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [duplicate, setDuplicate] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -97,6 +100,7 @@ export function Composer({ onSaved }: { onSaved?: (entry: EntryView) => void }) 
     setNote('');
     setParty('');
     setAttachment(null);
+    setTaxText('');
     setCategoryId(null);
     setType('expense');
     amountRef.current?.focus();
@@ -106,6 +110,10 @@ export function Composer({ onSaved }: { onSaved?: (entry: EntryView) => void }) 
     mutationFn: async () => {
       const money = Money.parse(amountText, currency);
       if (!money || money.minor <= 0n) throw new Error(t('amountRequired'));
+
+      // P1 #9: tax is part of the amount, so it can never exceed it.
+      const tax = bootstrap.business.gst_enabled ? Money.parse(taxText || '0', currency) : null;
+      if (tax && tax.minor > money.abs().minor) throw new Error('Tax cannot be more than the amount');
 
       const input = {
         clientId: newClientId(),
@@ -119,6 +127,7 @@ export function Composer({ onSaved }: { onSaved?: (entry: EntryView) => void }) 
         occurredAt: new Date().toISOString(),
         attachment,
         source: 'app' as const,
+        taxAmountMinor: tax ? tax.abs().minor.toString() : '0',
       };
 
       // Offline: queue with the client_id already minted, so the retry is safe.
@@ -131,9 +140,7 @@ export function Composer({ onSaved }: { onSaved?: (entry: EntryView) => void }) 
     onSuccess: async (entry) => {
       haptic(10);
       reset();
-      await queryClient.invalidateQueries({ queryKey: ['entries'] });
-      await queryClient.invalidateQueries({ queryKey: ['totals'] });
-      await queryClient.invalidateQueries({ queryKey: ['chips'] });
+      await invalidateLedger(queryClient);
       if (entry) onSaved?.(entry);
       else show({ message: 'Saved offline. It will sync when you reconnect.', durationMs: 3000 });
     },
@@ -292,6 +299,17 @@ export function Composer({ onSaved }: { onSaved?: (entry: EntryView) => void }) 
           list="party-suggestions"
           className="h-11 w-full rounded-card border border-border px-3 text-body placeholder:text-muted"
         />
+        {bootstrap.business.gst_enabled && (
+          <input
+            data-testid="tax-input"
+            aria-label={tGst('taxAmount')}
+            placeholder={tGst('taxAmount')}
+            inputMode="decimal"
+            value={taxText}
+            onChange={(e) => setTaxText(e.target.value)}
+            className="h-11 w-full rounded-card border border-border px-3 text-body placeholder:text-muted"
+          />
+        )}
         <PartySuggestions />
       </div>
 

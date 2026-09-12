@@ -1,10 +1,12 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
-import { Money } from '@khata/shared';
+import { useState } from 'react';
+import { Money, gstinSchema } from '@khata/shared';
 import { useBusiness } from '@/components/providers';
-import { Skeleton } from '@/components/ui/field';
+import { Button } from '@/components/ui/button';
+import { Label, Skeleton, TextField } from '@/components/ui/field';
 import { EntryList } from './entry-list';
 
 /**
@@ -51,7 +53,58 @@ export function PartyScreen({ partyId }: { partyId: string }) {
         </div>
       </section>
 
+      {bootstrap.business.gst_enabled && party && <PartyGstin partyId={party.id} gstin={party.gstin} />}
+
       {entriesQuery.isLoading ? <Skeleton className="h-24 w-full" /> : <EntryList entries={entries} emptyMessage={t('empty')} />}
     </div>
+  );
+}
+
+/** P1 #9: a supplier's GSTIN, validated before it is stored. */
+function PartyGstin({ partyId, gstin }: { partyId: string; gstin: string | null }) {
+  const t = useTranslations('gst');
+  const { repo, businessId } = useBusiness();
+  const queryClient = useQueryClient();
+  const [value, setValue] = useState(gstin ?? '');
+  const [error, setError] = useState<string | null>(null);
+
+  const save = useMutation({
+    mutationFn: async () => {
+      const trimmed = value.trim();
+      if (trimmed === '') return repo.setPartyGstin(partyId, null);
+      const parsed = gstinSchema.safeParse(trimmed);
+      if (!parsed.success) throw new Error(t('gstinInvalid'));
+      return repo.setPartyGstin(partyId, parsed.data);
+    },
+    onSuccess: async () => {
+      setError(null);
+      await queryClient.invalidateQueries({ queryKey: ['parties', businessId] });
+    },
+    onError: (err: Error) => setError(err.message),
+  });
+
+  return (
+    <section className="card p-4" aria-label={t('gstin')}>
+      <Label htmlFor="party-gstin">{t('gstin')}</Label>
+      <div className="mt-1 flex gap-2">
+        <TextField
+          id="party-gstin"
+          data-testid="party-gstin"
+          placeholder="29ABCDE1234F1Z5"
+          maxLength={15}
+          className="uppercase"
+          value={value}
+          onChange={(e) => setValue(e.target.value.toUpperCase())}
+        />
+        <Button variant="quiet" size="md" data-testid="save-gstin" onClick={() => save.mutate()}>
+          Save
+        </Button>
+      </div>
+      {error && (
+        <p role="alert" className="mt-2 text-label text-expense">
+          {error}
+        </p>
+      )}
+    </section>
   );
 }

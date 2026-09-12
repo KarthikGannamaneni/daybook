@@ -1,10 +1,13 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { APP_LOCK_IDLE_MS } from '@khata/shared';
+import { useQuery } from '@tanstack/react-query';
+import { Fingerprint } from 'lucide-react';
 import { useApp } from '@/components/providers';
 import { Button } from '@/components/ui/button';
+import { verifyPasskey } from '@/lib/security/passkey';
 import { verifyPin } from '@/lib/security/pin';
 
 /**
@@ -13,13 +16,23 @@ import { verifyPin } from '@/lib/security/pin';
  */
 export function AppLockGate({ children }: { children: React.ReactNode }) {
   const t = useTranslations('lock');
-  const { settings } = useApp();
+  const tPass = useTranslations('passkeys');
+  const { settings, repo } = useApp();
   const [locked, setLocked] = useState(false);
   const [pin, setPin] = useState('');
   const [error, setError] = useState(false);
   const hiddenSince = useRef<number | null>(null);
 
-  const enabled = Boolean(settings?.app_lock_enabled && settings.pin_hash);
+  // P1 #1: a passkey satisfies the lock on its own, so the PIN is no longer
+  // required for the lock to be meaningful.
+  const passkeysQuery = useQuery({
+    queryKey: ['passkeys'],
+    queryFn: () => repo!.listPasskeys(),
+    enabled: Boolean(repo && settings?.app_lock_enabled),
+  });
+  // Stable identity, or the unlock callback is rebuilt on every render.
+  const passkeys = useMemo(() => passkeysQuery.data ?? [], [passkeysQuery.data]);
+  const enabled = Boolean(settings?.app_lock_enabled && (settings.pin_hash || passkeys.length > 0));
 
   useEffect(() => {
     if (!enabled) {
@@ -51,6 +64,17 @@ export function AppLockGate({ children }: { children: React.ReactNode }) {
     }
   }, [pin, settings?.pin_hash]);
 
+  const unlockWithPasskey = useCallback(async () => {
+    try {
+      const used = await verifyPasskey(passkeys.map((k) => k.credential_id));
+      await repo?.touchPasskey(used);
+      setLocked(false);
+      setError(false);
+    } catch {
+      setError(true);
+    }
+  }, [passkeys, repo]);
+
   if (!locked) return <>{children}</>;
 
   return (
@@ -58,7 +82,25 @@ export function AppLockGate({ children }: { children: React.ReactNode }) {
       data-testid="lock-screen"
       className="mx-auto flex min-h-dvh w-full max-w-lg flex-col items-center justify-center gap-4 p-6"
     >
-      <h1 className="text-body font-semibold">{t('title')}</h1>
+      <h1 className="text-body font-semibold">
+        {passkeys.length > 0 && !settings?.pin_hash ? tPass('unlock') : t('title')}
+      </h1>
+
+      {passkeys.length > 0 && (
+        <Button
+          variant="primary"
+          size="lg"
+          className="w-56"
+          data-testid="unlock-passkey"
+          onClick={() => void unlockWithPasskey()}
+        >
+          <Fingerprint className="h-5 w-5" aria-hidden />
+          {tPass('unlock')}
+        </Button>
+      )}
+
+      {settings?.pin_hash && (
+        <>
       <input
         autoFocus
         inputMode="numeric"
@@ -70,10 +112,13 @@ export function AppLockGate({ children }: { children: React.ReactNode }) {
         onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
         className="tabular h-14 w-40 rounded-card border border-border bg-surface text-center text-amount tracking-[0.4em]"
       />
-      {error && <p className="text-label text-expense">{t('wrong')}</p>}
-      <Button variant="primary" size="lg" className="w-40" onClick={() => void unlock()}>
+      <Button variant="quiet" size="lg" className="w-40" onClick={() => void unlock()}>
         {t('unlock')}
       </Button>
+        </>
+      )}
+
+      {error && <p className="text-label text-expense">{settings?.pin_hash ? t('wrong') : tPass('failed')}</p>}
     </div>
   );
 }

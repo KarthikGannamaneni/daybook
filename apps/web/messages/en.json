@@ -125,5 +125,90 @@
   "errors": {
     "generic": "Something went wrong. Try again.",
     "offline": "You are offline. This entry will sync when you reconnect."
+  },
+  "recurring": {
+    "title": "Repeating",
+    "dueTitle": "Due today",
+    "dueHint": "Nothing is saved until you confirm.",
+    "confirm": "Confirm",
+    "skip": "Skip",
+    "confirmed": "Saved from your schedule",
+    "skipped": "Skipped. Next one is scheduled.",
+    "add": "Add a repeating entry",
+    "monthly": "Every month",
+    "weekly": "Every week",
+    "dayOfMonth": "Day of month",
+    "dayOfWeek": "Day",
+    "nextDue": "Next due {date}",
+    "paused": "Paused",
+    "pause": "Pause",
+    "resume": "Resume",
+    "remove": "Remove",
+    "empty": "Nothing repeats yet. Add rent or salaries once and confirm it each month in one tap.",
+    "clampNote": "Short months use their last day."
+  },
+  "budgets": {
+    "title": "Budgets",
+    "hint": "A monthly ceiling per category. You get a nudge at 80% and at 100% — in the app only.",
+    "set": "Set budget",
+    "remove": "Remove",
+    "spentOf": "{spent} of {budget}",
+    "remaining": "{amount} left",
+    "over": "{amount} over",
+    "warn": "{category} is at {percent}% of its budget.",
+    "exceeded": "{category} is over budget.",
+    "empty": "No budgets set. Pick a category and give it a monthly ceiling.",
+    "pickCategory": "Category",
+    "amount": "Monthly limit"
+  },
+  "members": {
+    "title": "People",
+    "hint": "Owners manage everything. Staff record entries. Accountants can only read and export.",
+    "invite": "Invite someone",
+    "inviteAs": "Invite as",
+    "inviteHint": "Share this code. It works once and expires in 24 hours.",
+    "join": "Join a business",
+    "joinHint": "Enter the 6-character code the owner sent you.",
+    "joined": "Joined {name}",
+    "remove": "Remove",
+    "you": "You",
+    "owner": "Owner",
+    "staff": "Staff",
+    "accountant": "Accountant",
+    "lastOwner": "A business needs at least one owner."
+  },
+  "statement": {
+    "download": "Monthly PDF statement",
+    "hint": "Summary and every entry for the month, ready to send to an accountant.",
+    "generating": "Building the statement"
+  },
+  "passkeys": {
+    "title": "Passkey",
+    "hint": "Unlock with your fingerprint or face instead of typing a PIN.",
+    "add": "Add a passkey",
+    "remove": "Remove",
+    "added": "Passkey added",
+    "unavailable": "This device or browser does not support passkeys.",
+    "unlock": "Unlock with passkey",
+    "failed": "That did not work. Try again, or use your PIN.",
+    "none": "No passkey yet."
+  },
+  "gst": {
+    "title": "GST",
+    "hint": "Adds an optional tax split on entries and a GSTIN on parties. India only.",
+    "enable": "Track GST",
+    "taxAmount": "Tax included",
+    "gstin": "GSTIN",
+    "gstinInvalid": "That does not look like a valid GSTIN",
+    "summary": "GST summary",
+    "collected": "Collected on income",
+    "paid": "Paid on expenses",
+    "netPayable": "Net payable",
+    "noneThisMonth": "No GST recorded this month."
+  },
+  "businesses": {
+    "switch": "Switch business",
+    "add": "Add a business",
+    "current": "Current"
   }
 }

@@ -1,3 +1,4 @@
+import path from 'node:path';
 import createNextIntlPlugin from 'next-intl/plugin';
 
 const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
@@ -5,6 +6,9 @@ const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // A stray lockfile in the home directory makes Next guess the wrong workspace
+  // root, which mis-traces the files a deployment needs.
+  outputFileTracingRoot: path.join(import.meta.dirname, '../../'),
   // The workspace packages ship TypeScript source; Next compiles them with the app.
   transpilePackages: ['@khata/parser', '@khata/shared'],
   experimental: {

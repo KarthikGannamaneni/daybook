@@ -10,6 +10,7 @@ import { useToast } from '@/components/toast';
 import { AmountText } from '@/components/ui/amount';
 import { Button } from '@/components/ui/button';
 import { Sheet } from '@/components/ui/sheet';
+import { invalidateLedger } from '@/lib/ledger-cache';
 import { cn, formatTime, haptic } from '@/lib/utils';
 
 /**
@@ -83,15 +84,13 @@ function EntrySheet({ entry, onClose }: { entry: EntryView | null; onClose: () =
     onSuccess: async (_data, id) => {
       haptic(12);
       onClose();
-      await queryClient.invalidateQueries({ queryKey: ['entries'] });
-      await queryClient.invalidateQueries({ queryKey: ['totals'] });
+      await invalidateLedger(queryClient);
       show({
         message: t('deleted'),
         actionLabel: t('undo'),
         onAction: async () => {
           await repo.setEntryDeleted(id, false);
-          await queryClient.invalidateQueries({ queryKey: ['entries'] });
-          await queryClient.invalidateQueries({ queryKey: ['totals'] });
+          await invalidateLedger(queryClient);
         },
       });
     },
@@ -208,8 +207,7 @@ function EntryEditor({
       });
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['entries'] });
-      await queryClient.invalidateQueries({ queryKey: ['totals'] });
+      await invalidateLedger(queryClient);
       onSaved();
     },
     onError: (err: Error) => setError(err.message),

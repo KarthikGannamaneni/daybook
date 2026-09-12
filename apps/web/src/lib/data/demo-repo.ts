@@ -1,5 +1,6 @@
 import { parseMessage } from '@khata/parser';
 import {
+  INVITE_CODE_TTL_MS,
   LINK_CODE_TTL_MS,
   WHATSAPP_UNDO_WINDOW_MS,
   normaliseTokens,
@@ -10,22 +11,32 @@ import {
   type Party,
   type PredictionRow,
   type QuickChip,
+  type BudgetStatus,
+  type GstSummaryRow,
+  type MemberView,
+  type PasskeyView,
+  type RecurringEntryView,
   type Role,
   type UserSettings,
 } from '@khata/shared';
-import { maskPhone } from './phone.ts';
 import {
   DEMO_STORAGE_KEY,
   loadState,
+  localDay,
   newId,
+  nextMonthlyDue,
+  nextWeeklyDue,
   saveState,
   seedDefaults,
   type DemoState,
 } from './demo-store.ts';
+import { maskPhone } from './phone.ts';
 import type {
   Bootstrap,
   BusinessSummary,
   CreateEntryInput,
+  CreateRecurringInput,
+  SavePasskeyInput,
   DayTotals,
   EntryFilter,
   LedgerRepo,
@@ -372,6 +383,7 @@ export class DemoRepo implements LedgerRepo {
       deleted_at: null,
       created_at: new Date().toISOString(),
       updated_at: null,
+      tax_amount_minor: input.taxAmountMinor ?? '0',
     };
     state.entries.push(entry);
     this.write(state);
@@ -402,6 +414,7 @@ export class DemoRepo implements LedgerRepo {
     if (input.occurredAt !== undefined) entry.occurred_at = input.occurredAt;
     if (input.type !== undefined) entry.type = input.type;
     if (input.partyName !== undefined) entry.party_id = this.upsertParty(state, entry.business_id, input.partyName);
+    if (input.taxAmountMinor !== undefined) entry.tax_amount_minor = input.taxAmountMinor;
     entry.updated_at = new Date().toISOString();
 
     this.write(state);
@@ -646,6 +659,372 @@ export class DemoRepo implements LedgerRepo {
       source: 'whatsapp',
     });
     return view.id;
+  }
+
+  // --- recurring entries (P1 #2) ---------------------------------------------
+
+  private recurringView(state: DemoState, r: DemoState['recurring'][number]): RecurringEntryView {
+    return {
+      ...r,
+      account_name: state.accounts.find((a) => a.id === r.account_id)?.name ?? '',
+      category_name: state.categories.find((c) => c.id === r.category_id)?.name ?? null,
+      party_name: state.parties.find((p) => p.id === r.party_id)?.name ?? null,
+    };
+  }
+
+  async listRecurring(businessId: string): Promise<RecurringEntryView[]> {
+    const state = this.read();
+    return state.recurring
+      .filter((r) => r.business_id === businessId)
+      .sort((a, b) => a.next_due_on.localeCompare(b.next_due_on))
+      .map((r) => this.recurringView(state, r));
+  }
+
+  async listDueRecurring(businessId: string): Promise<RecurringEntryView[]> {
+    const state = this.read();
+    const today = localDay(new Date());
+    return state.recurring
+      .filter((r) => r.business_id === businessId && r.is_active && r.next_due_on <= today)
+      .sort((a, b) => a.next_due_on.localeCompare(b.next_due_on))
+      .map((r) => this.recurringView(state, r));
+  }
+
+  async createRecurring(input: CreateRecurringInput): Promise<void> {
+    const state = this.read();
+    const userId = this.requireUser(state);
+    const role = this.roleFor(state, input.businessId, userId);
+    if (role !== 'owner' && role !== 'staff') throw new Error('Not allowed');
+
+    const now = new Date();
+    // Due today if today matches, otherwise the next matching day.
+    const nextDue =
+      input.cadence === 'monthly'
+        ? now.getDate() === input.dayOfMonth
+          ? localDay(now)
+          : nextMonthlyDue(now, input.dayOfMonth!)
+        : now.getDay() === input.dayOfWeek
+          ? localDay(now)
+          : nextWeeklyDue(now, input.dayOfWeek!);
+
+    state.recurring.push({
+      id: newId(),
+      business_id: input.businessId,
+      type: input.type,
+      amount_minor: input.amountMinor,
+      account_id: input.accountId,
+      category_id: input.categoryId,
+      party_id: this.upsertParty(state, input.businessId, input.partyName),
+      note: input.note,
+      cadence: input.cadence,
+      day_of_month: input.dayOfMonth,
+      day_of_week: input.dayOfWeek,
+      next_due_on: nextDue,
+      last_posted_on: null,
+      is_active: true,
+      created_by: userId,
+    });
+    this.write(state);
+  }
+
+  async setRecurringActive(id: string, active: boolean): Promise<void> {
+    const state = this.read();
+    const row = state.recurring.find((r) => r.id === id);
+    if (!row) return;
+    row.is_active = active;
+    this.write(state);
+  }
+
+  async deleteRecurring(id: string): Promise<void> {
+    const state = this.read();
+    state.recurring = state.recurring.filter((r) => r.id !== id);
+    this.write(state);
+  }
+
+  private advance(row: DemoState['recurring'][number]): void {
+    const from = new Date(`${row.next_due_on}T12:00:00`);
+    row.next_due_on =
+      row.cadence === 'monthly'
+        ? nextMonthlyDue(from, row.day_of_month ?? 1)
+        : nextWeeklyDue(from, row.day_of_week ?? 0);
+  }
+
+  /** Posts the proposed entry, then advances. Only ever called from a tap. */
+  async confirmRecurring(id: string): Promise<EntryView> {
+    const state = this.read();
+    const row = state.recurring.find((r) => r.id === id);
+    if (!row) throw new Error('That schedule no longer exists');
+
+    const view = await this.createEntry({
+      clientId: newId(),
+      businessId: row.business_id,
+      type: row.type,
+      amountMinor: row.amount_minor,
+      accountId: row.account_id,
+      categoryId: row.category_id,
+      partyName: state.parties.find((p) => p.id === row.party_id)?.name ?? null,
+      note: row.note,
+      occurredAt: new Date().toISOString(),
+    });
+
+    // createEntry wrote its own copy of the state, so re-read before advancing.
+    const fresh = this.read();
+    const target = fresh.recurring.find((r) => r.id === id);
+    if (target) {
+      target.last_posted_on = localDay(new Date());
+      this.advance(target);
+      this.write(fresh);
+    }
+    return view;
+  }
+
+  async skipRecurring(id: string): Promise<void> {
+    const state = this.read();
+    const row = state.recurring.find((r) => r.id === id);
+    if (!row) return;
+    this.advance(row);
+    this.write(state);
+  }
+
+  // --- budgets (P1 #8) --------------------------------------------------------
+
+  async listBudgets(businessId: string): Promise<BudgetStatus[]> {
+    const state = this.read();
+    const month = localDay(new Date()).slice(0, 7);
+    const tz = state.businesses.find((b) => b.id === businessId)?.timezone ?? 'Asia/Kolkata';
+
+    return state.budgets
+      .filter((b) => b.business_id === businessId && b.is_active)
+      .map((b) => {
+        let spent = 0n;
+        for (const e of state.entries) {
+          if (e.business_id !== businessId || e.deleted_at || e.type !== 'expense') continue;
+          if (e.category_id !== b.category_id) continue;
+          if (!dayKey(e.occurred_at, tz).startsWith(month)) continue;
+          spent += BigInt(e.amount_minor);
+        }
+        const budget = BigInt(b.amount_minor);
+        return {
+          budget_id: b.id,
+          business_id: b.business_id,
+          category_id: b.category_id,
+          category_name: state.categories.find((c) => c.id === b.category_id)?.name ?? '',
+          budget_minor: b.amount_minor,
+          spent_minor: spent.toString(),
+          remaining_minor: (spent > budget ? 0n : budget - spent).toString(),
+          percent_used: budget === 0n ? 0 : Number((spent * 100n) / budget),
+        };
+      })
+      .sort((a, b) => b.percent_used - a.percent_used);
+  }
+
+  async setBudget(businessId: string, categoryId: string, amountMinor: string): Promise<void> {
+    const state = this.read();
+    const userId = this.requireUser(state);
+    if (this.roleFor(state, businessId, userId) !== 'owner') {
+      throw new Error('Only the owner can set budgets');
+    }
+    const existing = state.budgets.find((b) => b.business_id === businessId && b.category_id === categoryId);
+    if (existing) {
+      existing.amount_minor = amountMinor;
+      existing.is_active = true;
+    } else {
+      state.budgets.push({ id: newId(), business_id: businessId, category_id: categoryId, amount_minor: amountMinor, is_active: true });
+    }
+    this.write(state);
+  }
+
+  async removeBudget(id: string): Promise<void> {
+    const state = this.read();
+    state.budgets = state.budgets.filter((b) => b.id !== id);
+    this.write(state);
+  }
+
+  // --- members and invites (P1 #6) --------------------------------------------
+
+  async listMembers(businessId: string): Promise<MemberView[]> {
+    const state = this.read();
+    const me = state.currentUserId;
+    return state.members
+      .filter((m) => m.business_id === businessId)
+      .map((m) => {
+        const user = state.users.find((u) => u.id === m.user_id);
+        const isSelf = m.user_id === me;
+        return {
+          id: m.id,
+          user_id: m.user_id,
+          role: m.role,
+          // §6.4: another member's number is never shown in full.
+          label: isSelf
+            ? (user?.name ?? user?.phone ?? 'You')
+            : (user?.name ?? (user?.phone ? maskPhone(user.phone) : 'Member')),
+          is_self: isSelf,
+        };
+      });
+  }
+
+  async setMemberRole(memberId: string, role: Role): Promise<void> {
+    const state = this.read();
+    const member = state.members.find((m) => m.id === memberId);
+    if (!member) return;
+    if (this.roleFor(state, member.business_id, this.requireUser(state)) !== 'owner') {
+      throw new Error('Only the owner can change roles');
+    }
+    // A business without an owner is unrecoverable; refuse to create one.
+    const owners = state.members.filter((m) => m.business_id === member.business_id && m.role === 'owner');
+    if (member.role === 'owner' && role !== 'owner' && owners.length <= 1) {
+      throw new Error('A business needs at least one owner');
+    }
+    member.role = role;
+    this.write(state);
+  }
+
+  async removeMember(memberId: string): Promise<void> {
+    const state = this.read();
+    const member = state.members.find((m) => m.id === memberId);
+    if (!member) return;
+    if (this.roleFor(state, member.business_id, this.requireUser(state)) !== 'owner') {
+      throw new Error('Only the owner can remove members');
+    }
+    const owners = state.members.filter((m) => m.business_id === member.business_id && m.role === 'owner');
+    if (member.role === 'owner' && owners.length <= 1) throw new Error('A business needs at least one owner');
+    state.members = state.members.filter((m) => m.id !== memberId);
+    this.write(state);
+  }
+
+  async createInvite(businessId: string, role: Role): Promise<LinkCode> {
+    const state = this.read();
+    const userId = this.requireUser(state);
+    if (this.roleFor(state, businessId, userId) !== 'owner') throw new Error('Only the owner can invite');
+
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const bytes = new Uint8Array(6);
+    crypto.getRandomValues(bytes);
+    const code = [...bytes].map((b) => alphabet[b % alphabet.length]).join('');
+    const expiresAt = new Date(Date.now() + INVITE_CODE_TTL_MS).toISOString();
+    state.invites.push({ id: newId(), business_id: businessId, role, code, expires_at: expiresAt, consumed_at: null });
+    this.write(state);
+    return { code, expiresAt };
+  }
+
+  async acceptInvite(code: string): Promise<string> {
+    const state = this.read();
+    const userId = this.requireUser(state);
+    const invite = state.invites.find(
+      (i) => i.code === code.trim().toUpperCase() && !i.consumed_at && i.expires_at > new Date().toISOString(),
+    );
+    if (!invite) throw new Error('That invite code is not valid or has expired');
+
+    const existing = state.members.find((m) => m.business_id === invite.business_id && m.user_id === userId);
+    if (existing) existing.role = invite.role;
+    else
+      state.members.push({
+        id: newId(),
+        business_id: invite.business_id,
+        user_id: userId,
+        role: invite.role,
+        created_at: new Date().toISOString(),
+      });
+
+    invite.consumed_at = new Date().toISOString();
+    this.write(state);
+    return invite.business_id;
+  }
+
+  // --- passkeys (P1 #1) -------------------------------------------------------
+
+  async listPasskeys(): Promise<PasskeyView[]> {
+    const state = this.read();
+    return state.passkeys
+      .filter((k) => k.user_id === state.currentUserId)
+      .map((k) => ({
+        id: k.id,
+        credential_id: k.credential_id,
+        device_label: k.device_label,
+        created_at: k.created_at,
+        last_used_at: k.last_used_at,
+      }));
+  }
+
+  async savePasskey(input: SavePasskeyInput): Promise<void> {
+    const state = this.read();
+    const userId = this.requireUser(state);
+    state.passkeys = state.passkeys.filter((k) => k.credential_id !== input.credentialId);
+    state.passkeys.push({
+      id: newId(),
+      user_id: userId,
+      credential_id: input.credentialId,
+      public_key: input.publicKey,
+      device_label: input.deviceLabel,
+      transports: input.transports,
+      created_at: new Date().toISOString(),
+      last_used_at: null,
+    });
+    this.write(state);
+  }
+
+  async removePasskey(id: string): Promise<void> {
+    const state = this.read();
+    state.passkeys = state.passkeys.filter((k) => k.id !== id);
+    this.write(state);
+  }
+
+  async touchPasskey(credentialId: string): Promise<void> {
+    const state = this.read();
+    const key = state.passkeys.find((k) => k.credential_id === credentialId);
+    if (!key) return;
+    key.last_used_at = new Date().toISOString();
+    this.write(state);
+  }
+
+  // --- GST (P1 #9) ------------------------------------------------------------
+
+  async setGstEnabled(businessId: string, enabled: boolean): Promise<void> {
+    const state = this.read();
+    const business = state.businesses.find((b) => b.id === businessId);
+    if (!business) return;
+    if (this.roleFor(state, businessId, this.requireUser(state)) !== 'owner') {
+      throw new Error('Only the owner can change this');
+    }
+    business.gst_enabled = enabled;
+    this.write(state);
+  }
+
+  async setPartyGstin(partyId: string, gstin: string | null): Promise<void> {
+    const state = this.read();
+    const party = state.parties.find((p) => p.id === partyId);
+    if (!party) return;
+    party.gstin = gstin;
+    this.write(state);
+  }
+
+  async gstSummary(businessId: string, monthIso: string): Promise<GstSummaryRow[]> {
+    const state = this.read();
+    const tz = state.businesses.find((b) => b.id === businessId)?.timezone ?? 'Asia/Kolkata';
+    const prefix = monthIso.slice(0, 7);
+    const buckets = new Map<string, GstSummaryRow>();
+
+    for (const e of state.entries) {
+      if (e.business_id !== businessId || e.deleted_at) continue;
+      const tax = BigInt(e.tax_amount_minor ?? '0');
+      if (tax <= 0n) continue;
+      if (!dayKey(e.occurred_at, tz).startsWith(prefix)) continue;
+
+      const row = buckets.get(e.type) ?? {
+        business_id: businessId,
+        month: `${prefix}-01`,
+        type: e.type,
+        gross_minor: '0',
+        tax_minor: '0',
+        net_minor: '0',
+        entry_count: 0,
+      };
+      row.gross_minor = (BigInt(row.gross_minor) + BigInt(e.amount_minor)).toString();
+      row.tax_minor = (BigInt(row.tax_minor) + tax).toString();
+      row.net_minor = (BigInt(row.net_minor) + BigInt(e.amount_minor) - tax).toString();
+      row.entry_count += 1;
+      buckets.set(e.type, row);
+    }
+    return [...buckets.values()];
   }
 
   // --- realtime -------------------------------------------------------------

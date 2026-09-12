@@ -107,3 +107,54 @@ export const whatsappInboundSchema = z.object({
   ),
 });
 export type WhatsappInbound = z.infer<typeof whatsappInboundSchema>;
+
+// ---------------------------------------------------------------------------
+// P1 input shapes
+// ---------------------------------------------------------------------------
+
+export const cadenceSchema = z.enum(['weekly', 'monthly']);
+
+export const recurringInputSchema = z
+  .object({
+    business_id: uuidSchema,
+    type: entryTypeSchema.default('expense'),
+    amount_minor: amountMinorSchema,
+    account_id: uuidSchema,
+    category_id: uuidSchema.nullable().optional(),
+    party_name: z.string().trim().min(1).max(80).nullable().optional(),
+    note: z.string().trim().max(280).nullable().optional(),
+    cadence: cadenceSchema,
+    day_of_month: z.number().int().min(1).max(31).nullable().optional(),
+    day_of_week: z.number().int().min(0).max(6).nullable().optional(),
+  })
+  .refine(
+    (v) => (v.cadence === 'monthly' ? v.day_of_month != null : v.day_of_week != null),
+    { message: 'Pick the day this repeats on', path: ['day_of_month'] },
+  );
+export type RecurringInput = z.infer<typeof recurringInputSchema>;
+
+export const budgetInputSchema = z.object({
+  business_id: uuidSchema,
+  category_id: uuidSchema,
+  amount_minor: amountMinorSchema,
+});
+export type BudgetInput = z.infer<typeof budgetInputSchema>;
+
+export const inviteCodeSchema = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .regex(/^[A-Z0-9]{6}$/, 'Invite codes are 6 characters');
+
+/** GSTIN: 2-digit state, 10-char PAN, entity digit, 'Z', checksum. */
+export const gstinSchema = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .regex(
+    /^[0-3][0-9][A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/,
+    'That does not look like a valid GSTIN',
+  );
+
+/** Tax must be part of the amount, never on top of it. */
+export const taxAmountSchema = z.string().regex(/^\d+$/, 'Tax must be whole minor units');

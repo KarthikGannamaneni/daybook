@@ -14,7 +14,12 @@ import { Sheet } from '@/components/ui/sheet';
 import { isDemoMode } from '@/lib/data';
 import { hashPin } from '@/lib/security/pin';
 import { dayKey, zonedDayEnd, zonedDayStart } from '@/lib/utils';
+import { BudgetSettings } from './budget-settings';
+import { GstSettings } from './gst-settings';
+import { MembersSettings, JoinBusiness } from './members-settings';
+import { PasskeySettings } from './passkey-settings';
 import { ReauthSheet } from './reauth-sheet';
+import { RecurringSettings } from './recurring-settings';
 import { TaxonomySettings } from './taxonomy-settings';
 
 export function SettingsScreen() {
@@ -38,7 +43,19 @@ export function SettingsScreen() {
 
       <AppLockSection />
 
+      <PasskeySettings />
+
+      <RecurringSettings />
+
+      {isOwner && <BudgetSettings />}
+
       <TaxonomySettings />
+
+      <MembersSettings />
+
+      <JoinBusiness />
+
+      {isOwner && <GstSettings />}
 
       {isOwner ? <WhatsappSection /> : null}
 

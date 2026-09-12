@@ -1,10 +1,17 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
+  INVITE_CODE_TTL_MS,
   LINK_CODE_TTL_MS,
+  type BudgetStatus,
   type CategoryTotal,
   type EntryView,
+  type GstSummaryRow,
+  type MemberView,
   type Party,
+  type PasskeyView,
   type QuickChip,
+  type RecurringEntryView,
+  type Role,
   type UserSettings,
 } from '@khata/shared';
 import { maskPhone } from './phone.ts';
@@ -13,6 +20,8 @@ import type {
   Bootstrap,
   BusinessSummary,
   CreateEntryInput,
+  CreateRecurringInput,
+  SavePasskeyInput,
   DayTotals,
   EntryFilter,
   LedgerRepo,
@@ -259,6 +268,7 @@ export class SupabaseRepo implements LedgerRepo {
         source: input.source ?? 'app',
         created_by: session?.userId ?? null,
         client_id: input.clientId,
+        tax_amount_minor: input.taxAmountMinor ?? '0',
       })
       .select('id')
       .single();
@@ -283,6 +293,7 @@ export class SupabaseRepo implements LedgerRepo {
     if (input.note !== undefined) patch.note = input.note;
     if (input.occurredAt !== undefined) patch.occurred_at = input.occurredAt;
     if (input.type !== undefined) patch.type = input.type;
+    if (input.taxAmountMinor !== undefined) patch.tax_amount_minor = input.taxAmountMinor;
 
     const { data: existing } = await this.db.from('entries').select('business_id').eq('id', input.id).single();
     if (input.partyName !== undefined && existing) {
@@ -451,6 +462,291 @@ export class SupabaseRepo implements LedgerRepo {
     if (error) throw new Error(error.message);
   }
 
+  // --- recurring entries (P1 #2) ---------------------------------------------
+
+  private static readonly RECURRING_COLUMNS =
+    'id, business_id, type, amount_minor, account_id, category_id, party_id, note, cadence, ' +
+    'day_of_month, day_of_week, next_due_on, last_posted_on, is_active, created_by, ' +
+    'accounts!inner(name), categories(name), parties(name)';
+
+  private toRecurringView(row: any): RecurringEntryView {
+    const { accounts, categories, parties, ...rest } = row;
+    return {
+      ...rest,
+      account_name: accounts?.name ?? '',
+      category_name: categories?.name ?? null,
+      party_name: parties?.name ?? null,
+    };
+  }
+
+  async listRecurring(businessId: string): Promise<RecurringEntryView[]> {
+    const { data, error } = await this.db
+      .from('recurring_entries')
+      .select(SupabaseRepo.RECURRING_COLUMNS)
+      .eq('business_id', businessId)
+      .order('next_due_on');
+    if (error) throw new Error(error.message);
+    return (data ?? []).map((r) => this.toRecurringView(r));
+  }
+
+  async listDueRecurring(businessId: string): Promise<RecurringEntryView[]> {
+    // fn_due_recurring applies the business timezone, which is what decides
+    // whether "today" has arrived for this shop.
+    const { data, error } = await this.db.rpc('fn_due_recurring', { p_business_id: businessId });
+    if (error) throw new Error(error.message);
+    const ids = (data ?? []).map((r: { id: string }) => r.id);
+    if (ids.length === 0) return [];
+
+    const { data: full, error: joinError } = await this.db
+      .from('recurring_entries')
+      .select(SupabaseRepo.RECURRING_COLUMNS)
+      .in('id', ids)
+      .order('next_due_on');
+    if (joinError) throw new Error(joinError.message);
+    return (full ?? []).map((r) => this.toRecurringView(r));
+  }
+
+  async createRecurring(input: CreateRecurringInput): Promise<void> {
+    const session = await this.getSession();
+    const partyId = await this.resolveParty(input.businessId, input.partyName);
+
+    // Ask Postgres for the first due date so the schedule maths lives in one
+    // place, clamping and all.
+    const today = new Date().toISOString().slice(0, 10);
+    const { data: nextDue, error: dueError } = await this.db.rpc('fn_next_due', {
+      p_cadence: input.cadence,
+      p_day_of_month: input.dayOfMonth,
+      p_day_of_week: input.dayOfWeek,
+      // Look from yesterday so something due today is due today, not next cycle.
+      p_after: new Date(Date.now() - 86400000).toISOString().slice(0, 10),
+    });
+    if (dueError) throw new Error(dueError.message);
+
+    const { error } = await this.db.from('recurring_entries').insert({
+      business_id: input.businessId,
+      type: input.type,
+      amount_minor: input.amountMinor,
+      account_id: input.accountId,
+      category_id: input.categoryId,
+      party_id: partyId,
+      note: input.note,
+      cadence: input.cadence,
+      day_of_month: input.dayOfMonth,
+      day_of_week: input.dayOfWeek,
+      next_due_on: (nextDue as string | null) ?? today,
+      created_by: session?.userId ?? null,
+    });
+    if (error) throw new Error(error.message);
+  }
+
+  async setRecurringActive(id: string, active: boolean): Promise<void> {
+    const { error } = await this.db.from('recurring_entries').update({ is_active: active }).eq('id', id);
+    if (error) throw new Error(error.message);
+  }
+
+  async deleteRecurring(id: string): Promise<void> {
+    const { error } = await this.db.from('recurring_entries').delete().eq('id', id);
+    if (error) throw new Error(error.message);
+  }
+
+  private async advanceRecurring(id: string, posted: boolean): Promise<void> {
+    const { data: row } = await this.db
+      .from('recurring_entries')
+      .select('cadence, day_of_month, day_of_week, next_due_on')
+      .eq('id', id)
+      .single();
+    if (!row) return;
+
+    const { data: nextDue } = await this.db.rpc('fn_next_due', {
+      p_cadence: row.cadence,
+      p_day_of_month: row.day_of_month,
+      p_day_of_week: row.day_of_week,
+      p_after: row.next_due_on,
+    });
+
+    const patch: Record<string, unknown> = { next_due_on: nextDue };
+    if (posted) patch.last_posted_on = new Date().toISOString().slice(0, 10);
+    await this.db.from('recurring_entries').update(patch).eq('id', id);
+  }
+
+  async confirmRecurring(id: string): Promise<EntryView> {
+    const { data: row, error } = await this.db
+      .from('recurring_entries')
+      .select('*, parties(name)')
+      .eq('id', id)
+      .single();
+    if (error || !row) throw new Error(error?.message ?? 'That schedule no longer exists');
+
+    const view = await this.createEntry({
+      clientId: crypto.randomUUID(),
+      businessId: row.business_id,
+      type: row.type,
+      amountMinor: String(row.amount_minor),
+      accountId: row.account_id,
+      categoryId: row.category_id,
+      partyName: (row as any).parties?.name ?? null,
+      note: row.note,
+      occurredAt: new Date().toISOString(),
+    });
+
+    await this.advanceRecurring(id, true);
+    return view;
+  }
+
+  async skipRecurring(id: string): Promise<void> {
+    await this.advanceRecurring(id, false);
+  }
+
+  // --- budgets (P1 #8) --------------------------------------------------------
+
+  async listBudgets(businessId: string): Promise<BudgetStatus[]> {
+    const { data, error } = await this.db
+      .from('v_budget_status')
+      .select('*')
+      .eq('business_id', businessId)
+      .order('percent_used', { ascending: false });
+    if (error) throw new Error(error.message);
+    return (data ?? []).map((b: any) => ({
+      ...b,
+      budget_minor: String(b.budget_minor),
+      spent_minor: String(b.spent_minor),
+      remaining_minor: String(b.remaining_minor),
+    })) as BudgetStatus[];
+  }
+
+  async setBudget(businessId: string, categoryId: string, amountMinor: string): Promise<void> {
+    const { error } = await this.db.from('budgets').upsert(
+      { business_id: businessId, category_id: categoryId, amount_minor: amountMinor, is_active: true },
+      { onConflict: 'business_id,category_id' },
+    );
+    if (error) throw new Error(error.message);
+  }
+
+  async removeBudget(id: string): Promise<void> {
+    const { error } = await this.db.from('budgets').delete().eq('id', id);
+    if (error) throw new Error(error.message);
+  }
+
+  // --- members and invites (P1 #6) --------------------------------------------
+
+  async listMembers(businessId: string): Promise<MemberView[]> {
+    const session = await this.getSession();
+    const { data, error } = await this.db
+      .from('business_members')
+      .select('id, user_id, role')
+      .eq('business_id', businessId);
+    if (error) throw new Error(error.message);
+
+    // RLS keeps other users' rows out of auth.users, so members are labelled by
+    // role rather than by identity. §6.4: never expose another member's number.
+    return (data ?? []).map((m: any) => ({
+      id: m.id,
+      user_id: m.user_id,
+      role: m.role,
+      label: m.user_id === session?.userId ? 'You' : roleLabel(m.role),
+      is_self: m.user_id === session?.userId,
+    }));
+  }
+
+  async setMemberRole(memberId: string, role: Role): Promise<void> {
+    const { error } = await this.db.from('business_members').update({ role }).eq('id', memberId);
+    if (error) throw new Error(error.message);
+  }
+
+  async removeMember(memberId: string): Promise<void> {
+    const { error } = await this.db.from('business_members').delete().eq('id', memberId);
+    if (error) throw new Error(error.message);
+  }
+
+  async createInvite(businessId: string, role: Role): Promise<LinkCode> {
+    const session = await this.getSession();
+    if (!session) throw new Error('Not signed in');
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const bytes = new Uint8Array(6);
+    crypto.getRandomValues(bytes);
+    const code = [...bytes].map((b) => alphabet[b % alphabet.length]).join('');
+    const expiresAt = new Date(Date.now() + INVITE_CODE_TTL_MS).toISOString();
+
+    const { error } = await this.db
+      .from('business_invites')
+      .insert({ business_id: businessId, role, code, expires_at: expiresAt, created_by: session.userId });
+    if (error) throw new Error(error.message);
+    return { code, expiresAt };
+  }
+
+  async acceptInvite(code: string): Promise<string> {
+    const { data, error } = await this.db.rpc('fn_accept_invite', { p_code: code });
+    if (error) throw new Error(error.message);
+    return data as string;
+  }
+
+  // --- passkeys (P1 #1) -------------------------------------------------------
+
+  async listPasskeys(): Promise<PasskeyView[]> {
+    const { data, error } = await this.db
+      .from('user_passkeys')
+      .select('id, credential_id, device_label, created_at, last_used_at')
+      .order('created_at');
+    if (error) throw new Error(error.message);
+    return (data ?? []) as PasskeyView[];
+  }
+
+  async savePasskey(input: SavePasskeyInput): Promise<void> {
+    const session = await this.getSession();
+    if (!session) throw new Error('Not signed in');
+    const { error } = await this.db.from('user_passkeys').upsert(
+      {
+        user_id: session.userId,
+        credential_id: input.credentialId,
+        public_key: input.publicKey,
+        device_label: input.deviceLabel,
+        transports: input.transports,
+      },
+      { onConflict: 'credential_id' },
+    );
+    if (error) throw new Error(error.message);
+  }
+
+  async removePasskey(id: string): Promise<void> {
+    const { error } = await this.db.from('user_passkeys').delete().eq('id', id);
+    if (error) throw new Error(error.message);
+  }
+
+  async touchPasskey(credentialId: string): Promise<void> {
+    await this.db
+      .from('user_passkeys')
+      .update({ last_used_at: new Date().toISOString() })
+      .eq('credential_id', credentialId);
+  }
+
+  // --- GST (P1 #9) ------------------------------------------------------------
+
+  async setGstEnabled(businessId: string, enabled: boolean): Promise<void> {
+    const { error } = await this.db.from('businesses').update({ gst_enabled: enabled }).eq('id', businessId);
+    if (error) throw new Error(error.message);
+  }
+
+  async setPartyGstin(partyId: string, gstin: string | null): Promise<void> {
+    const { error } = await this.db.from('parties').update({ gstin }).eq('id', partyId);
+    if (error) throw new Error(error.message);
+  }
+
+  async gstSummary(businessId: string, monthIso: string): Promise<GstSummaryRow[]> {
+    const month = monthIso.slice(0, 8) + '01';
+    const { data, error } = await this.db
+      .from('v_gst_summary')
+      .select('*')
+      .eq('business_id', businessId)
+      .eq('month', month);
+    if (error) throw new Error(error.message);
+    return (data ?? []).map((r: any) => ({
+      ...r,
+      gross_minor: String(r.gross_minor),
+      tax_minor: String(r.tax_minor),
+      net_minor: String(r.net_minor),
+    })) as GstSummaryRow[];
+  }
+
   // --- realtime -------------------------------------------------------------
 
   subscribeEntries(businessId: string, onChange: () => void): () => void {
@@ -466,4 +762,9 @@ export class SupabaseRepo implements LedgerRepo {
       void this.db.removeChannel(channel);
     };
   }
+}
+
+/** Members are labelled by role when their identity is not ours to reveal. */
+function roleLabel(role: Role): string {
+  return role === 'owner' ? 'Owner' : role === 'staff' ? 'Staff member' : 'Accountant';
 }

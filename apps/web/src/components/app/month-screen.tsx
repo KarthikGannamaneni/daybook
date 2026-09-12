@@ -10,7 +10,9 @@ import { useBusiness } from '@/components/providers';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/field';
 import { addMonths, formatMonthLabel, monthKey, zonedDayStart } from '@/lib/utils';
+import { BudgetBars } from './budget-bars';
 import { EntryList } from './entry-list';
+import { StatementButton } from './statement-button';
 
 /**
  * §4.4 month view: totals, then a horizontal bar list by category. No pie
@@ -94,6 +96,10 @@ export function MonthScreen() {
             </button>
           </section>
         )}
+
+        <BudgetBars />
+
+        <StatementButton month={month} />
 
         <section aria-label={t('byCategory')}>
           <h3 className="mb-2 text-label text-muted">{t('byCategory')}</h3>

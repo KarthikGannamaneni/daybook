@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/field';
 import { pendingEntries, type QueuedCreate } from '@/lib/offline/queue';
 import { dayKey } from '@/lib/utils';
 import { Composer } from './composer';
+import { RecurringDueCard } from './recurring-card';
 import { EntryList } from './entry-list';
 
 /**
@@ -40,6 +41,9 @@ export function TodayScreen() {
 
   return (
     <div className="flex flex-col gap-4">
+      {/* P1 #2: due schedules propose themselves above the composer. */}
+      <RecurringDueCard />
+
       <Composer />
 
       <section className="card p-4" aria-label={t('spentToday')}>

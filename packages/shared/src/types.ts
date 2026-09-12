@@ -13,6 +13,8 @@ export interface Business {
   starting_balance_minor: string;
   owner_id: string;
   created_at: string;
+  /** P1 #9: GST fields only appear when the owner turns them on. India only. */
+  gst_enabled?: boolean;
 }
 
 export interface BusinessMember {
@@ -68,6 +70,8 @@ export interface Entry {
   deleted_at: string | null;
   created_at: string;
   updated_at: string | null;
+  /** P1 #9: tax portion *included in* amount_minor, never added on top. */
+  tax_amount_minor?: string;
 }
 
 /** An entry joined with the names the UI actually renders. */
@@ -103,6 +107,71 @@ export interface QuickChip {
   account_id: string;
   note: string | null;
   uses: number;
+}
+
+export type RecurrenceCadence = 'weekly' | 'monthly';
+
+export interface RecurringEntry {
+  id: string;
+  business_id: string;
+  type: EntryType;
+  amount_minor: string;
+  account_id: string;
+  category_id: string | null;
+  party_id: string | null;
+  note: string | null;
+  cadence: RecurrenceCadence;
+  day_of_month: number | null;
+  day_of_week: number | null;
+  next_due_on: string;
+  last_posted_on: string | null;
+  is_active: boolean;
+  created_by: string | null;
+}
+
+/** A recurring entry joined with the names the proposal card renders. */
+export interface RecurringEntryView extends RecurringEntry {
+  account_name: string;
+  category_name: string | null;
+  party_name: string | null;
+}
+
+export interface BudgetStatus {
+  budget_id: string;
+  business_id: string;
+  category_id: string;
+  category_name: string;
+  budget_minor: string;
+  spent_minor: string;
+  remaining_minor: string;
+  percent_used: number;
+}
+
+export interface MemberView {
+  id: string;
+  user_id: string;
+  role: Role;
+  /** Masked, per §6.4 — a member's full number is never shown to other members. */
+  label: string;
+  is_self: boolean;
+}
+
+export interface PasskeyView {
+  id: string;
+  credential_id: string;
+  device_label: string | null;
+  created_at: string;
+  last_used_at: string | null;
+}
+
+export interface GstSummaryRow {
+  business_id: string;
+  month: string;
+  type: EntryType;
+  gross_minor: string;
+  tax_minor: string;
+  net_minor: string;
+  entry_count: number;
 }
 
 export interface UserSettings {

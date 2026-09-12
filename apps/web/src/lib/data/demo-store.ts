@@ -39,6 +39,52 @@ export interface DemoLinkCode {
   consumed_at: string | null;
 }
 
+export interface DemoRecurring {
+  id: string;
+  business_id: string;
+  type: 'expense' | 'income';
+  amount_minor: string;
+  account_id: string;
+  category_id: string | null;
+  party_id: string | null;
+  note: string | null;
+  cadence: 'weekly' | 'monthly';
+  day_of_month: number | null;
+  day_of_week: number | null;
+  next_due_on: string;
+  last_posted_on: string | null;
+  is_active: boolean;
+  created_by: string | null;
+}
+
+export interface DemoBudget {
+  id: string;
+  business_id: string;
+  category_id: string;
+  amount_minor: string;
+  is_active: boolean;
+}
+
+export interface DemoPasskey {
+  id: string;
+  user_id: string;
+  credential_id: string;
+  public_key: string;
+  device_label: string | null;
+  transports: string[];
+  created_at: string;
+  last_used_at: string | null;
+}
+
+export interface DemoInvite {
+  id: string;
+  business_id: string;
+  role: 'owner' | 'staff' | 'accountant';
+  code: string;
+  expires_at: string;
+  consumed_at: string | null;
+}
+
 export interface DemoState {
   version: number;
   currentUserId: string | null;
@@ -53,10 +99,14 @@ export interface DemoState {
   links: DemoLink[];
   codes: DemoLinkCode[];
   attachments: Record<string, string>;
+  recurring: DemoRecurring[];
+  budgets: DemoBudget[];
+  passkeys: DemoPasskey[];
+  invites: DemoInvite[];
 }
 
 export const DEMO_STORAGE_KEY = 'khata.demo.v1';
-const VERSION = 1;
+const VERSION = 2;
 
 const EXPENSE_CATEGORIES: Array<[string, string[]]> = [
   ['Rent', ['rent', 'lease']],
@@ -175,6 +225,10 @@ export function buildSeedState(now = new Date()): DemoState {
     links: [],
     codes: [],
     attachments: {},
+    recurring: [],
+    budgets: [],
+    passkeys: [],
+    invites: [],
   };
 
   const anil: DemoUser = { id: 'user-anil', phone: '+919999900001', email: 'anil@example.com', name: 'Anil Sharma' };
@@ -343,7 +397,97 @@ export function buildSeedState(now = new Date()): DemoState {
     }
   }
 
+  // P1: seed one recurring entry due today and two budgets per business, so the
+  // proposal card and the budget bars are visible without any setup first.
+  for (const business of state.businesses) {
+    const account = state.accounts.find((a) => a.business_id === business.id && a.kind === 'bank')!;
+    const rent = state.categories.find(
+      (c) => c.business_id === business.id && c.name === 'Rent' && c.type === 'expense',
+    )!;
+    const salaries = state.categories.find(
+      (c) => c.business_id === business.id && c.name === 'Salaries' && c.type === 'expense',
+    )!;
+    const food = state.categories.find(
+      (c) => c.business_id === business.id && c.name === 'Food & Tea' && c.type === 'expense',
+    )!;
+    const today = localDay(now);
+
+    state.recurring.push({
+      id: newId(),
+      business_id: business.id,
+      type: 'expense',
+      amount_minor: '1200000',
+      account_id: account.id,
+      category_id: rent.id,
+      party_id: state.parties.find((p) => p.business_id === business.id && p.name === 'Landlord')?.id ?? null,
+      note: 'monthly rent',
+      cadence: 'monthly',
+      day_of_month: Number(today.slice(8, 10)),
+      day_of_week: null,
+      next_due_on: today,
+      last_posted_on: null,
+      is_active: true,
+      created_by: business.owner_id,
+    });
+
+    state.recurring.push({
+      id: newId(),
+      business_id: business.id,
+      type: 'expense',
+      amount_minor: '1800000',
+      account_id: account.id,
+      category_id: salaries.id,
+      party_id: null,
+      note: 'staff salary',
+      cadence: 'monthly',
+      day_of_month: 5,
+      day_of_week: null,
+      next_due_on: nextMonthlyDue(now, 5),
+      last_posted_on: null,
+      is_active: true,
+      created_by: business.owner_id,
+    });
+
+    state.budgets.push(
+      { id: newId(), business_id: business.id, category_id: food.id, amount_minor: '300000', is_active: true },
+      { id: newId(), business_id: business.id, category_id: rent.id, amount_minor: '1500000', is_active: true },
+    );
+  }
+
   return state;
+}
+
+/** Local calendar day as YYYY-MM-DD. */
+export function localDay(at: Date): string {
+  return `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, '0')}-${String(at.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * Next occurrence of a day-of-month strictly after `after`, clamped to the end
+ * of short months. Mirrors fn_next_due in the migration.
+ */
+export function nextMonthlyDue(after: Date, dayOfMonth: number): string {
+  let year = after.getFullYear();
+  let month = after.getMonth();
+  for (let i = 0; i < 24; i++) {
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const candidate = new Date(year, month, Math.min(dayOfMonth, daysInMonth));
+    if (candidate.getTime() > new Date(after.getFullYear(), after.getMonth(), after.getDate()).getTime()) {
+      return localDay(candidate);
+    }
+    month += 1;
+    if (month > 11) {
+      month = 0;
+      year += 1;
+    }
+  }
+  return localDay(after);
+}
+
+/** Next occurrence of a weekday (0 = Sunday) strictly after `after`. */
+export function nextWeeklyDue(after: Date, dayOfWeek: number): string {
+  const delta = ((dayOfWeek - after.getDay() + 7 - 1) % 7) + 1;
+  return localDay(new Date(after.getFullYear(), after.getMonth(), after.getDate() + delta));
 }
 
 export function loadState(): DemoState {

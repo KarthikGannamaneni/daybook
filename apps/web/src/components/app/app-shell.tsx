@@ -8,6 +8,7 @@ import { useEffect } from 'react';
 import { useApp } from '@/components/providers';
 import { cn } from '@/lib/utils';
 import { AppLockGate } from './app-lock';
+import { BusinessSwitcher } from './business-switcher';
 import { ComposerSkeleton } from './composer-skeleton';
 
 /**
@@ -75,12 +76,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <AppLockGate>
       <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col">
         <header className="flex items-center justify-between gap-3 px-4 pb-2 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
-          <div className="min-w-0">
-            <h1 className="truncate text-body font-semibold">{bootstrap.business.name}</h1>
-            <p className="text-label text-muted">
-              {bootstrap.role === 'owner' ? 'Owner' : bootstrap.role === 'staff' ? 'Staff' : 'Accountant'}
-            </p>
-          </div>
+          <BusinessSwitcher name={bootstrap.business.name} role={bootstrap.role} />
           <div className="flex items-center gap-2">
             {settings?.app_lock_enabled && (
               <Lock aria-label={t('locked')} className="h-4 w-4 text-muted" data-testid="lock-indicator" />

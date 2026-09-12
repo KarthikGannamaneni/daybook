@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { Money } from '@khata/shared';
@@ -17,7 +17,9 @@ export function OnboardingScreen() {
   const t = useTranslations('onboarding');
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { repo } = useApp();
+  const { repo, setBusinessId } = useApp();
+  const params = useSearchParams();
+  const isAdditional = params.get('add') === '1';
 
   const detectedLocale = typeof navigator !== 'undefined' ? navigator.language : 'en-IN';
   const detectedTimezone =
@@ -42,8 +44,10 @@ export function OnboardingScreen() {
         startingBalanceMinor: startingBalance.minor.toString(),
       });
     },
-    onSuccess: async () => {
+    onSuccess: async (newBusinessId) => {
       await queryClient.invalidateQueries();
+      // P1 #7: land in the business that was just created, not the old one.
+      if (newBusinessId) setBusinessId(newBusinessId);
       router.replace('/');
     },
     onError: (err: Error) => setError(err.message),
@@ -52,6 +56,11 @@ export function OnboardingScreen() {
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-lg flex-col justify-center gap-4 p-6">
       <p className="text-label text-muted">{t('step', { current: step + 1, total: 3 })}</p>
+      {isAdditional && (
+        <button type="button" className="self-start text-label text-muted" onClick={() => router.replace('/')}>
+          Cancel
+        </button>
+      )}
 
       {step === 0 && (
         <>
